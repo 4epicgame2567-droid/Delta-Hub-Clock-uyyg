@@ -1,398 +1,389 @@
-// c1.js — D3LTAHUB app/game cards with admin-gated add and per-user delete
-let appInd;
+// c1.js — D3LTAHUB app/game cards | global server-side custom apps
 const g = window.location.pathname === "/a";
 const a = window.location.pathname === "/b";
 const c = window.location.pathname === "/gt";
 
 let t;
-try {
-  t = window.top.location.pathname === "/d";
-} catch {
-  try {
-    t = window.parent.location.pathname === "/d";
-  } catch {
-    t = false;
-  }
-}
+try { t = window.top.location.pathname === "/d"; }
+catch { try { t = window.parent.location.pathname === "/d"; } catch { t = false; } }
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
+// ─── helpers ──────────────────────────────────────────────────────────────────
 function Span(name) {
-  return name.split("").map(char => {
-    const span = document.createElement("span");
-    span.textContent = char;
-    return span;
-  });
+  return name.split("").map(ch => { const s = document.createElement("span"); s.textContent = ch; return s; });
 }
+function saveToLocal(p) { sessionStorage.setItem("GoUrl", p); }
+function pinKey() { return g ? "Gpinned" : (c ? "Tpinned" : "Apinned"); }
 
-function saveToLocal(path) {
-  sessionStorage.setItem("GoUrl", path);
-}
-
-function storageKey() {
-  if (g) return "Gcustom";
-  if (c) return "Tcustom";
-  return "Acustom";
-}
-
-function pinStorageKey() {
-  if (g) return "Gpinned";
-  if (c) return "Tpinned";
-  return "Apinned";
-}
-
-// ─── navigation ─────────────────────────────────────────────────────────────
-
+// ─── navigation ───────────────────────────────────────────────────────────────
 function handleClick(app) {
-  if (typeof app.say !== "undefined") alert(app.say);
+  if (app.say) alert(app.say);
+  if (app.html) { openHtmlApp(app.html); return; }
 
-  let Selected = app.link;
-  if (app.links && app.links.length > 1) {
-    Selected = getSelected(app.links);
-    if (!Selected) return false;
-  }
+  let url = app.link;
+  if (app.links && app.links.length > 1) { url = getSelected(app.links); if (!url) return; }
 
-  if (app.local) {
-    saveToLocal(Selected);
-    window.location.href = "rx";
-    if (t) window.location.href = Selected;
-  } else if (app.local2) {
-    saveToLocal(Selected);
-    window.location.href = Selected;
-  } else if (app.blank) {
-    blank(Selected);
-  } else if (app.now) {
-    now(Selected);
-    if (t) window.location.href = Selected;
-  } else if (app.custom) {
-    promptAndAddCustomApp();
-  } else if (app.dy) {
-    dy(Selected);
-  } else {
-    go(Selected);
-    if (t) blank(Selected);
-  }
-  return false;
+  if (app.local) { saveToLocal(url); window.location.href = "rx"; if (t) window.location.href = url; }
+  else if (app.local2) { saveToLocal(url); window.location.href = url; }
+  else if (app.blank) { blank(url); }
+  else if (app.now) { now(url); if (t) window.location.href = url; }
+  else if (app.custom) { openAddModal(); }
+  else if (app.dy) { dy(url); }
+  else { go(url); if (t) blank(url); }
 }
 
 function getSelected(links) {
-  const options = links.map((link, index) => `${index + 1}: ${link.name}`).join("\n");
-  const choice = prompt(`Select a link by entering the corresponding number:\n${options}`);
-  const selectedIndex = Number.parseInt(choice, 10) - 1;
-  if (Number.isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= links.length) {
-    alert("Invalid selection. Please try again.");
-    return null;
-  }
-  return links[selectedIndex].url;
+  const opts = links.map((l, i) => `${i + 1}: ${l.name}`).join("\n");
+  const choice = parseInt(prompt(`Select a link:\n${opts}`), 10) - 1;
+  if (isNaN(choice) || choice < 0 || choice >= links.length) { alert("Invalid selection."); return null; }
+  return links[choice].url;
 }
 
-// ─── pinning ─────────────────────────────────────────────────────────────────
+function openHtmlApp(html) {
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+}
 
+// ─── pin ──────────────────────────────────────────────────────────────────────
 function setPin(index) {
-  const key = pinStorageKey();
-  let pins = localStorage.getItem(key);
-  pins = pins ? pins.split(",").map(Number) : [];
-
-  if (pinContains(index, pins)) {
-    pins.splice(pins.indexOf(index), 1);
-  } else {
-    pins.push(index);
-  }
-  localStorage.setItem(key, pins);
+  let pins = (localStorage.getItem(pinKey()) || "").split(",").filter(Boolean).map(Number);
+  const i = pins.indexOf(index);
+  i === -1 ? pins.push(index) : pins.splice(i, 1);
+  localStorage.setItem(pinKey(), pins.join(","));
   location.reload();
 }
+function pinHas(i, p) { return p.includes(i); }
 
-function pinContains(i, p) {
-  return p.some(x => x === i);
+// ─── server custom apps API ───────────────────────────────────────────────────
+async function fetchCustomApps() {
+  try { const r = await fetch("/hub-admin/apps"); return r.ok ? r.json() : []; }
+  catch { return []; }
 }
 
-// ─── admin password check ────────────────────────────────────────────────────
-
-async function checkAdminPassword(password) {
-  try {
-    const res = await fetch("/hub-admin/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    const data = await res.json();
-    return data.ok === true;
-  } catch {
-    return false;
-  }
-}
-
-// ─── custom app storage ──────────────────────────────────────────────────────
-
-function getCustomApps() {
-  const raw = localStorage.getItem(storageKey());
-  return raw ? JSON.parse(raw) : {};
-}
-
-function saveCustomApps(apps) {
-  localStorage.setItem(storageKey(), JSON.stringify(apps));
-}
-
-function addCustomApp(customApp) {
-  const apps = getCustomApps();
-  const key = `custom_${Date.now()}`;
-  apps[key] = customApp;
-  saveCustomApps(apps);
-  return key;
-}
-
-function deleteCustomApp(key) {
-  const apps = getCustomApps();
-  delete apps[key];
-  saveCustomApps(apps);
-
-  // Remove the card from DOM
-  const card = document.querySelector(`[data-custom-key="${key}"]`);
-  if (card) card.remove();
-}
-
-// ─── add custom app flow ─────────────────────────────────────────────────────
-
-async function promptAndAddCustomApp() {
-  const password = prompt("Enter admin password to add a custom app:");
-  if (!password) return;
-
-  const ok = await checkAdminPassword(password);
-  if (!ok) {
-    alert("Incorrect admin password. Only the site creator can add custom apps.");
-    return;
-  }
-
-  const title = prompt("Enter title for the app:");
-  if (!title) return;
-  const link = prompt("Enter link for the app:");
-  if (!link) return;
-
-  const customApp = {
-    name: `[Custom] ${title}`,
-    link: link,
-    image: "/assets/media/icons/custom.webp",
-    custom: false,
-  };
-
-  const key = addCustomApp(customApp);
-  CreateCustomApp(customApp, key, true);
-}
-
-// ─── render custom app card ──────────────────────────────────────────────────
-
-function CreateCustomApp(customApp, key, prepend = false) {
-  const columnDiv = document.createElement("div");
-  columnDiv.classList.add("column");
-  columnDiv.setAttribute("data-category", "all");
-  columnDiv.setAttribute("data-custom-key", key);
-
-  const linkElem = document.createElement("a");
-  linkElem.onclick = () => handleClick(customApp);
-
-  const image = document.createElement("img");
-  image.width = 145;
-  image.height = 145;
-  image.src = customApp.image || "/assets/media/icons/custom.webp";
-  image.loading = "lazy";
-
-  const paragraph = document.createElement("p");
-  for (const span of Span(customApp.name)) paragraph.appendChild(span);
-
-  linkElem.appendChild(image);
-  linkElem.appendChild(paragraph);
-  columnDiv.appendChild(linkElem);
-
-  // Pin button
-  const pinIcon = document.createElement("i");
-  pinIcon.classList.add("fa", "fa-map-pin");
-  pinIcon.ariaHidden = true;
-  const pinBtn = document.createElement("button");
-  pinBtn.appendChild(pinIcon);
-  Object.assign(pinBtn.style, {
-    float: "right",
-    cursor: "pointer",
-    backgroundColor: "rgb(45,45,45)",
-    borderRadius: "50%",
-    borderColor: "transparent",
-    color: "white",
-    top: "-200px",
-    position: "relative",
-    marginLeft: "4px",
+async function serverAddApp(data) {
+  const r = await fetch("/hub-admin/apps", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
   });
-  pinBtn.onclick = () => setPin(appInd);
-  pinBtn.title = "Pin";
+  return r.json();
+}
 
-  // Delete button
-  const trashIcon = document.createElement("i");
-  trashIcon.classList.add("fa", "fa-trash");
-  trashIcon.ariaHidden = true;
-  const delBtn = document.createElement("button");
-  delBtn.appendChild(trashIcon);
-  Object.assign(delBtn.style, {
-    float: "right",
-    cursor: "pointer",
-    backgroundColor: "rgb(180,40,40)",
-    borderRadius: "50%",
-    borderColor: "transparent",
-    color: "white",
-    top: "-200px",
-    position: "relative",
-  });
-  delBtn.onclick = (e) => {
-    e.stopPropagation();
-    if (confirm(`Delete "${customApp.name}"?`)) {
-      deleteCustomApp(key);
+async function serverDeleteApp(id) {
+  const r = await fetch(`/hub-admin/apps/${id}`, { method: "DELETE" });
+  return r.json();
+}
+
+// ─── modal styles (injected once) ────────────────────────────────────────────
+function injectModalStyles() {
+  if (document.getElementById("d3lta-modal-styles")) return;
+  const style = document.createElement("style");
+  style.id = "d3lta-modal-styles";
+  style.textContent = `
+    #d3lta-overlay {
+      position: fixed; inset: 0; background: rgba(30,10,60,.55);
+      backdrop-filter: blur(4px); z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
     }
-  };
-  delBtn.title = "Delete";
-
-  columnDiv.appendChild(delBtn);
-  columnDiv.appendChild(pinBtn);
-
-  const nonPinnedApps = document.querySelector(".apps");
-  if (prepend) {
-    nonPinnedApps.insertBefore(columnDiv, nonPinnedApps.firstChild);
-  } else {
-    nonPinnedApps.appendChild(columnDiv);
-  }
+    #d3lta-modal {
+      background: var(--card-bg, #ede8f7); border-radius: 16px;
+      padding: 28px 32px; width: min(480px, 92vw);
+      box-shadow: 0 8px 40px rgba(80,20,160,.25);
+      display: flex; flex-direction: column; gap: 14px;
+      color: var(--text, #2d1a5e);
+    }
+    #d3lta-modal h2 { margin: 0; font-size: 1.25rem; color: var(--primary, #9b72d8); }
+    #d3lta-modal label { font-size: .85rem; font-weight: 600; margin-bottom: 3px; display: block; }
+    #d3lta-modal input, #d3lta-modal textarea {
+      width: 100%; box-sizing: border-box;
+      background: var(--background, #f3f0fa); border: 1.5px solid var(--primary, #9b72d8);
+      border-radius: 8px; padding: 9px 12px; font-size: .95rem;
+      color: var(--text, #2d1a5e); outline: none; font-family: inherit;
+    }
+    #d3lta-modal textarea { resize: vertical; min-height: 90px; }
+    #d3lta-modal .row { display: flex; gap: 10px; }
+    #d3lta-modal .row button { flex: 1; }
+    #d3lta-modal button {
+      padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: .95rem; font-weight: 600; transition: opacity .15s;
+    }
+    #d3lta-modal button:hover { opacity: .85; }
+    #d3lta-modal .btn-primary { background: var(--primary, #9b72d8); color: #fff; }
+    #d3lta-modal .btn-cancel  { background: #c0b0e0; color: #2d1a5e; }
+    #d3lta-modal .hint { font-size:.78rem; color:#7a6fa0; margin-top:-8px; }
+    #d3lta-modal .icon-preview {
+      width:48px; height:48px; border-radius:8px; object-fit:cover;
+      border: 1.5px solid var(--primary,#9b72d8); display:none;
+    }
+    #d3lta-modal .icon-row { display:flex; align-items:center; gap:10px; }
+    #d3lta-modal .tabs { display:flex; gap:8px; }
+    #d3lta-modal .tab-btn {
+      padding:6px 16px; border-radius:20px; border:1.5px solid var(--primary,#9b72d8);
+      background:transparent; color:var(--primary,#9b72d8); cursor:pointer; font-size:.88rem;
+    }
+    #d3lta-modal .tab-btn.active { background:var(--primary,#9b72d8); color:#fff; }
+    #d3lta-modal .tab-pane { display:none; }
+    #d3lta-modal .tab-pane.active { display:flex; flex-direction:column; gap:14px; }
+    #d3lta-error { color:#c0392b; font-size:.85rem; display:none; }
+  `;
+  document.head.appendChild(style);
 }
 
-// ─── load saved custom apps on page load ─────────────────────────────────────
+// ─── add modal ────────────────────────────────────────────────────────────────
+function openAddModal() {
+  injectModalStyles();
+  const overlay = document.createElement("div");
+  overlay.id = "d3lta-overlay";
+  overlay.innerHTML = `
+    <div id="d3lta-modal">
+      <h2>➕ Add Custom App</h2>
+      <div>
+        <label>Admin Password <span style="color:#c0392b">*</span></label>
+        <input type="password" id="dm-pass" placeholder="Enter admin password" />
+      </div>
+      <div>
+        <label>App Name <span style="color:#c0392b">*</span></label>
+        <input type="text" id="dm-name" placeholder="e.g. My App" />
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="url">URL / Link</button>
+        <button class="tab-btn" data-tab="html">Custom HTML</button>
+      </div>
+      <div class="tab-pane active" id="tab-url">
+        <div>
+          <label>URL</label>
+          <input type="url" id="dm-link" placeholder="https://example.com" />
+          <p class="hint">Leave blank if using Custom HTML mode.</p>
+        </div>
+      </div>
+      <div class="tab-pane" id="tab-html">
+        <div>
+          <label>HTML Content</label>
+          <textarea id="dm-html" placeholder="&lt;!DOCTYPE html&gt;&lt;html&gt;...&lt;/html&gt;"></textarea>
+          <p class="hint">Paste any HTML. Opens in a new tab when clicked.</p>
+        </div>
+      </div>
+      <div>
+        <label>Icon</label>
+        <div class="icon-row">
+          <input type="url" id="dm-icon" placeholder="https://... icon URL (optional)" />
+          <img id="dm-icon-preview" class="icon-preview" alt="preview" />
+        </div>
+        <p class="hint">Leave blank for the default icon.</p>
+      </div>
+      <div id="d3lta-error"></div>
+      <div class="row">
+        <button class="btn-cancel" id="dm-cancel">Cancel</button>
+        <button class="btn-primary" id="dm-save">Add App</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 
-document.addEventListener("DOMContentLoaded", () => {
-  const stored = getCustomApps();
-  for (const [key, app] of Object.entries(stored)) {
-    CreateCustomApp(app, key, false);
-  }
+  // tab switching
+  let activeTab = "url";
+  overlay.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeTab = btn.dataset.tab;
+      overlay.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === activeTab));
+      overlay.querySelectorAll(".tab-pane").forEach(p => p.classList.toggle("active", p.id === `tab-${activeTab}`));
+    });
+  });
+
+  // icon preview
+  const iconInput = overlay.querySelector("#dm-icon");
+  const iconPreview = overlay.querySelector("#dm-icon-preview");
+  iconInput.addEventListener("input", () => {
+    const val = iconInput.value.trim();
+    if (val) { iconPreview.src = val; iconPreview.style.display = "block"; }
+    else { iconPreview.style.display = "none"; }
+  });
+
+  // close
+  overlay.querySelector("#dm-cancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+  // submit
+  overlay.querySelector("#dm-save").addEventListener("click", async () => {
+    const errEl = overlay.querySelector("#d3lta-error");
+    errEl.style.display = "none";
+    const password = overlay.querySelector("#dm-pass").value.trim();
+    const name = overlay.querySelector("#dm-name").value.trim();
+    const link = overlay.querySelector("#dm-link").value.trim();
+    const html = overlay.querySelector("#dm-html").value.trim();
+    const image = iconInput.value.trim();
+
+    if (!password) { errEl.textContent = "Admin password is required."; errEl.style.display = "block"; return; }
+    if (!name) { errEl.textContent = "App name is required."; errEl.style.display = "block"; return; }
+    if (activeTab === "url" && !link) { errEl.textContent = "Please enter a URL, or switch to HTML mode."; errEl.style.display = "block"; return; }
+    if (activeTab === "html" && !html) { errEl.textContent = "Please paste some HTML content."; errEl.style.display = "block"; return; }
+
+    const btn = overlay.querySelector("#dm-save");
+    btn.textContent = "Saving…"; btn.disabled = true;
+
+    const result = await serverAddApp({
+      password,
+      name,
+      link: activeTab === "url" ? link : "",
+      html: activeTab === "html" ? html : "",
+      image,
+    });
+
+    if (!result.ok) {
+      errEl.textContent = result.error || "Failed to add app. Check your password.";
+      errEl.style.display = "block";
+      btn.textContent = "Add App"; btn.disabled = false;
+      return;
+    }
+
+    overlay.remove();
+    appendCustomCard(result.app, true);
+  });
+}
+
+// ─── render a custom app card ─────────────────────────────────────────────────
+function appendCustomCard(app, prepend = false) {
+  const col = document.createElement("div");
+  col.classList.add("column");
+  col.setAttribute("data-category", "all");
+  col.setAttribute("data-custom-id", app.id);
+
+  const link = document.createElement("a");
+  link.onclick = (e) => { e.preventDefault(); handleClick(app); };
+  link.style.cursor = "pointer";
+
+  const img = document.createElement("img");
+  img.width = 145; img.height = 145; img.loading = "lazy";
+  img.src = app.image || "/assets/media/icons/custom.webp";
+  img.onerror = () => { img.src = "/assets/media/icons/custom.webp"; };
+
+  const p = document.createElement("p");
+  for (const s of Span(app.name)) p.appendChild(s);
+  if (app.html && !app.link) p.title = "Custom HTML app";
+
+  link.appendChild(img);
+  link.appendChild(p);
+  col.appendChild(link);
+
+  // delete button
+  const delIcon = document.createElement("i");
+  delIcon.classList.add("fa", "fa-trash");
+  const delBtn = document.createElement("button");
+  delBtn.appendChild(delIcon);
+  delBtn.title = "Delete this custom app";
+  Object.assign(delBtn.style, {
+    float: "right", cursor: "pointer",
+    background: "rgba(180,40,40,.85)", borderRadius: "50%",
+    border: "none", color: "#fff",
+    top: "-200px", position: "relative", padding: "7px 9px",
+  });
+  delBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${app.name}"?`)) return;
+    const res = await serverDeleteApp(app.id);
+    if (res.ok) col.remove();
+    else alert("Could not delete app — please try again.");
+  });
+  col.appendChild(delBtn);
+
+  const container = document.querySelector(".apps");
+  if (prepend) container.insertBefore(col, container.firstChild);
+  else container.appendChild(col);
+}
+
+// ─── load global custom apps on page load ─────────────────────────────────────
+document.addEventListener("DOMContentLoaded", async () => {
+  const customApps = await fetchCustomApps();
+  for (const app of customApps) appendCustomCard(app, false);
 });
 
 // ─── load built-in apps/games from JSON ──────────────────────────────────────
-
 let jsonPath = "/assets/json/a.min.json";
 if (g) jsonPath = "/assets/json/g.min.json";
 else if (c) jsonPath = "/assets/json/t.min.json";
-else if (a) jsonPath = "/assets/json/a.min.json";
 
 fetch(jsonPath)
   .then(r => r.json())
-  .then(appsList => {
-    appsList.sort((x, y) => {
+  .then(list => {
+    list.sort((x, y) => {
       if (x.name.startsWith("[Custom]")) return -1;
       if (y.name.startsWith("[Custom]")) return 1;
       return x.name.localeCompare(y.name);
     });
 
-    const nonPinnedApps = document.querySelector(".apps");
-    const pinnedApps = document.querySelector(".pinned");
+    const nonPinned = document.querySelector(".apps");
+    const pinned = document.querySelector(".pinned");
+    const pinList = (localStorage.getItem(pinKey()) || "").split(",").filter(Boolean).map(Number);
+    let idx = 0;
 
-    let pinList = localStorage.getItem(pinStorageKey()) || "";
-    pinList = pinList ? pinList.split(",").map(Number) : [];
-    appInd = 0;
-
-    for (const app of appsList) {
-      if (app.categories?.includes("local")) {
-        app.local = true;
-      } else if (app.link && (app.link.includes("now.gg") || app.link.includes("nowgg.me"))) {
-        if (app.partial == null) {
-          app.partial = true;
-          app.say = "Now.gg is currently not working for some users.";
-        }
+    for (const app of list) {
+      if (app.categories?.includes("local")) app.local = true;
+      else if (app.link?.includes("now.gg") || app.link?.includes("nowgg.me")) {
+        if (app.partial == null) { app.partial = true; app.say = "Now.gg is currently not working for some users."; }
       } else if (app.link?.includes("nowgg.nl")) {
-        if (app.error == null) {
-          app.error = true;
-          app.say = "NowGG.nl is currently down.";
-        }
+        if (app.error == null) { app.error = true; app.say = "NowGG.nl is currently down."; }
       }
 
-      const pinNum = appInd;
-      const columnDiv = document.createElement("div");
-      columnDiv.classList.add("column");
-      columnDiv.setAttribute("data-category", app.categories.join(" "));
+      const pinNum = idx;
+      const col = document.createElement("div");
+      col.classList.add("column");
+      col.setAttribute("data-category", (app.categories || ["all"]).join(" "));
 
+      // pin button
       const pinIcon = document.createElement("i");
       pinIcon.classList.add("fa", "fa-map-pin");
-      pinIcon.ariaHidden = true;
-      const btn = document.createElement("button");
-      btn.appendChild(pinIcon);
-      Object.assign(btn.style, {
-        float: "right",
-        backgroundColor: "rgb(45,45,45)",
-        borderRadius: "50%",
-        borderColor: "transparent",
-        color: "white",
-        top: "-200px",
-        position: "relative",
+      const pinBtn = document.createElement("button");
+      pinBtn.appendChild(pinIcon);
+      pinBtn.title = "Pin";
+      Object.assign(pinBtn.style, {
+        float: "right", background: "rgb(45,45,45)", borderRadius: "50%",
+        border: "none", color: "#fff", top: "-200px", position: "relative",
       });
-      btn.onclick = () => setPin(pinNum);
-      btn.title = "Pin";
+      pinBtn.onclick = () => setPin(pinNum);
 
-      const link = document.createElement("a");
-      link.onclick = () => handleClick(app);
+      const lnk = document.createElement("a");
+      lnk.onclick = (e) => { e.preventDefault(); handleClick(app); };
+      lnk.style.cursor = "pointer";
 
-      const image = document.createElement("img");
-      image.width = 145;
-      image.height = 145;
-      image.loading = "lazy";
-      if (app.image) {
-        image.src = app.image;
-      } else {
-        image.style.display = "none";
-      }
+      const img = document.createElement("img");
+      img.width = 145; img.height = 145; img.loading = "lazy";
+      img.src = app.image || "";
+      if (!app.image) img.style.display = "none";
 
-      const paragraph = document.createElement("p");
-      for (const span of Span(app.name)) paragraph.appendChild(span);
+      const p = document.createElement("p");
+      for (const s of Span(app.name)) p.appendChild(s);
 
-      if (app.error) {
-        paragraph.style.color = "red";
-        if (!app.say) app.say = "This app is currently not working.";
-      } else if (app.load) {
-        paragraph.style.color = "yellow";
-        if (!app.say) app.say = "This app may experience excessive loading times.";
-      } else if (app.partial) {
-        paragraph.style.color = "yellow";
-        if (!app.say) app.say = "This app is currently experiencing some issues, it may not work for you.";
-      }
+      if (app.error) { p.style.color = "red"; app.say = app.say || "This app is currently not working."; }
+      else if (app.load || app.partial) { p.style.color = "yellow"; app.say = app.say || "This app may experience issues."; }
 
-      link.appendChild(image);
-      link.appendChild(paragraph);
-      columnDiv.appendChild(link);
+      lnk.appendChild(img);
+      lnk.appendChild(p);
+      col.appendChild(lnk);
+      if (idx !== 0) col.appendChild(pinBtn);
 
-      if (appInd !== 0) columnDiv.appendChild(btn);
-
-      if (pinList != null && appInd !== 0 && pinContains(appInd, pinList)) {
-        pinnedApps.appendChild(columnDiv);
-      } else {
-        nonPinnedApps.appendChild(columnDiv);
-      }
-      appInd += 1;
+      if (idx !== 0 && pinHas(idx, pinList)) pinned.appendChild(col);
+      else nonPinned.appendChild(col);
+      idx++;
     }
 
-    const appsContainer = document.getElementById("apps-container");
-    if (appsContainer) {
-      appsContainer.appendChild(pinnedApps);
-      appsContainer.appendChild(nonPinnedApps);
-    }
+    const wrap = document.getElementById("apps-container");
+    if (wrap) { wrap.appendChild(pinned); wrap.appendChild(nonPinned); }
   })
-  .catch(err => console.error("Error fetching JSON data:", err));
+  .catch(e => console.error("Error loading apps:", e));
 
-// ─── search & category filter ────────────────────────────────────────────────
-
+// ─── search + category ────────────────────────────────────────────────────────
 function category() {
-  const selectedCategories = Array.from(document.querySelectorAll("#category option:checked")).map(o => o.value);
-  for (const game of document.getElementsByClassName("column")) {
-    const cats = game.getAttribute("data-category").split(" ");
-    game.style.display =
-      selectedCategories.length === 0 || selectedCategories.some(cat => cats.includes(cat))
-        ? "block"
-        : "none";
+  const sel = Array.from(document.querySelectorAll("#category option:checked")).map(o => o.value);
+  for (const col of document.getElementsByClassName("column")) {
+    const cats = (col.getAttribute("data-category") || "").split(" ");
+    col.style.display = sel.length === 0 || sel.some(s => cats.includes(s)) ? "block" : "none";
   }
 }
 
 function bar() {
-  const filter = document.getElementById("search").value.toLowerCase();
-  for (const game of document.getElementsByClassName("column")) {
-    const name = game.getElementsByTagName("p")[0]?.textContent.toLowerCase() || "";
-    game.style.display = name.includes(filter) ? "block" : "none";
+  const f = document.getElementById("search").value.toLowerCase();
+  for (const col of document.getElementsByClassName("column")) {
+    const name = (col.querySelector("p")?.textContent || "").toLowerCase();
+    col.style.display = name.includes(f) ? "block" : "none";
   }
 }

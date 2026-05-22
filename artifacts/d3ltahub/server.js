@@ -31,6 +31,22 @@ const PORT = process.env.PORT || 8080;
 const cache = new Map();
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 
+// ─── custom apps file storage ─────────────────────────────────────────────────
+const CUSTOM_APPS_FILE = path.join(__dirname, "custom-apps.json");
+
+function loadCustomApps() {
+  try {
+    if (fs.existsSync(CUSTOM_APPS_FILE)) {
+      return JSON.parse(fs.readFileSync(CUSTOM_APPS_FILE, "utf8"));
+    }
+  } catch {}
+  return [];
+}
+
+function saveCustomApps(apps) {
+  fs.writeFileSync(CUSTOM_APPS_FILE, JSON.stringify(apps, null, 2));
+}
+
 wisp.options.allow_loopback_ips = true;
 wisp.options.allow_private_ips = true;
 
@@ -89,9 +105,10 @@ app.get("/e/*", async (req, res, next) => {
 });
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// ─── admin password check ─────────────────────────────────────────────────────
 app.post("/hub-admin/check", (req, res) => {
   const { password } = req.body;
   if (password && password === config.adminPassword) {
@@ -100,6 +117,46 @@ app.post("/hub-admin/check", (req, res) => {
   return res.status(403).json({ ok: false });
 });
 
+// ─── custom apps API ──────────────────────────────────────────────────────────
+app.get("/hub-admin/apps", (_req, res) => {
+  res.json(loadCustomApps());
+});
+
+app.post("/hub-admin/apps", (req, res) => {
+  const { password, name, link, image, html } = req.body;
+  if (!password || password !== config.adminPassword) {
+    return res.status(403).json({ ok: false, error: "Invalid admin password" });
+  }
+  if (!name) {
+    return res.status(400).json({ ok: false, error: "Name is required" });
+  }
+  const apps = loadCustomApps();
+  const newApp = {
+    id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    name: name.trim(),
+    link: link?.trim() || "",
+    image: image?.trim() || "/assets/media/icons/custom.webp",
+    html: html?.trim() || "",
+    categories: ["all"],
+    addedAt: new Date().toISOString(),
+  };
+  apps.push(newApp);
+  saveCustomApps(apps);
+  res.json({ ok: true, app: newApp });
+});
+
+app.delete("/hub-admin/apps/:id", (req, res) => {
+  let apps = loadCustomApps();
+  const before = apps.length;
+  apps = apps.filter(a => a.id !== req.params.id);
+  if (apps.length === before) {
+    return res.status(404).json({ ok: false, error: "App not found" });
+  }
+  saveCustomApps(apps);
+  res.json({ ok: true });
+});
+
+// ─── static files ─────────────────────────────────────────────────────────────
 const transportStaticOptions = {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath);
@@ -131,11 +188,11 @@ routes.forEach(route => {
   });
 });
 
-app.use((req, res, next) => {
+app.use((_req, res) => {
   res.status(404).sendFile(path.join(__dirname, "static", "404.html"));
 });
 
-app.use((err, req, res, next) => {
+app.use((err, _req, res, _next) => {
   console.error(err.stack);
   res.status(500).sendFile(path.join(__dirname, "static", "404.html"));
 });
