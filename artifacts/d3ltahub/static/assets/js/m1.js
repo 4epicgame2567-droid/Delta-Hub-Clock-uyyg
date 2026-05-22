@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const html = `
       <div id="icon-container">
-        <a class="icon" href="/./" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
+        <a class="icon" href="/home" style="display:flex;align-items:center;gap:8px;text-decoration:none;">
           <img alt="nav" id="INImg" src="${LogoUrl}" style="width:32px;height:32px;border-radius:8px;"/>
           <span style="font-size:1.2rem;font-weight:900;color:#2d1a5e;letter-spacing:-0.5px;">D3LTA<span style="color:#9b72d8;">HUB</span></span>
         </a>

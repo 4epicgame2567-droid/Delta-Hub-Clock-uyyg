@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClassLink LaunchPad</title>
+  <link rel="icon" href="https://www.classlink.com/hubfs/classlink-favicon.png" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #0a3d62;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Top bar */
+    .topbar {
+      background: #fff;
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0,0,0,.12);
+    }
+    .topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .topbar-logo svg { width: 36px; height: 36px; }
+    .topbar-logo span {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1565c0;
+      letter-spacing: -.5px;
+    }
+    .topbar-logo span em {
+      color: #e65100;
+      font-style: normal;
+    }
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .topbar-right a {
+      font-size: .9rem;
+      color: #555;
+      text-decoration: none;
+    }
+    .topbar-right a:hover { color: #1565c0; }
+
+    /* Hero */
+    .hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 40px;
+    }
+    .hero h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+      text-align: center;
+    }
+    .hero p {
+      font-size: 1rem;
+      color: #90caf9;
+      margin-bottom: 36px;
+      text-align: center;
+    }
+
+    /* District card */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      width: min(420px, 92vw);
+      padding: 36px 36px 28px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.25);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .district-badge {
+      width: 72px; height: 72px;
+      background: #e3f2fd;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 14px;
+    }
+    .district-badge svg { width: 40px; height: 40px; }
+    .card h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1565c0;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .card .sub {
+      font-size: .85rem;
+      color: #888;
+      margin-bottom: 28px;
+      text-align: center;
+    }
+
+    .btn-sso {
+      width: 100%;
+      padding: 13px;
+      background: #1565c0;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: .3px;
+      margin-bottom: 12px;
+      transition: background .15s;
+    }
+    .btn-sso:hover { background: #1976d2; }
+
+    .btn-google {
+      width: 100%;
+      padding: 12px;
+      background: #fff;
+      color: #444;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: .95rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background .15s;
+      text-decoration: none;
+      margin-bottom: 10px;
+    }
+    .btn-google:hover { background: #f5f5f5; }
+    .btn-google img { width: 20px; height: 20px; }
+
+    .divider {
+      width: 100%;
+      display: flex; align-items: center; gap: 10px;
+      margin: 6px 0 14px;
+      color: #bbb; font-size: .8rem;
+    }
+    .divider::before, .divider::after {
+      content: ""; flex: 1; height: 1px; background: #e0e0e0;
+    }
+
+    /* Secret click-now button — styled as innocent "Student Portal" link */
+    .portal-link {
+      margin-top: 8px;
+      font-size: .82rem;
+      color: #90caf9;
+      text-align: center;
+    }
+    .portal-link a {
+      color: #e65100;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-size: inherit;
+      font-family: inherit;
+      padding: 0;
+    }
+    .portal-link a:hover { text-decoration: underline; }
+
+    /* Footer */
+    .footer {
+      background: #07305a;
+      text-align: center;
+      padding: 14px;
+      font-size: .78rem;
+      color: #5c8fb0;
+    }
+    .footer a { color: #5c8fb0; text-decoration: none; }
+    .footer a:hover { color: #90caf9; }
+
+    /* tiles strip */
+    .tiles {
+      display: flex; gap: 16px; flex-wrap: wrap; justify-content: center;
+      margin-top: 40px; padding: 0 20px;
+    }
+    .tile {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      width: 90px; height: 90px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; color: #fff; font-size: .72rem; font-weight: 600;
+      text-align: center; cursor: default;
+      transition: background .15s;
+    }
+    .tile:hover { background: rgba(255,255,255,.14); }
+    .tile img { width: 36px; height: 36px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top navigation bar -->
+  <div class="topbar">
+    <a class="topbar-logo" href="#">
+      <!-- ClassLink-style logo mark -->
+      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="8" fill="#1565c0"/>
+        <path d="M10 18a8 8 0 1 1 8 8" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="18" cy="18" r="3" fill="#e65100"/>
+      </svg>
+      <span>Class<em>Link</em></span>
+    </a>
+    <div class="topbar-right">
+      <a href="#">Help</a>
+      <a href="#">Privacy</a>
+    </div>
+  </div>
+
+  <!-- Main hero -->
+  <div class="hero">
+    <h1>Welcome to ClassLink LaunchPad</h1>
+    <p>Sign in to access your school apps and resources</p>
+
+    <div class="card">
+      <div class="district-badge">
+        <!-- School icon -->
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5 20L20 8l15 12v14H5V20z" fill="#1565c0" opacity=".2"/>
+          <path d="M5 20L20 8l15 12v14H5V20z" stroke="#1565c0" stroke-width="2"/>
+          <rect x="14" y="26" width="5" height="8" rx="1" fill="#1565c0"/>
+          <rect x="21" y="26" width="5" height="8" rx="1" fill="#1565c0" opacity=".5"/>
+          <rect x="16" y="18" width="4" height="4" rx=".5" fill="#1565c0"/>
+        </svg>
+      </div>
+      <h2>Lincoln Unified School District</h2>
+      <p class="sub">Student &amp; Staff Portal</p>
+
+      <button class="btn-sso" onclick="alert('Connecting to district SSO...')">Sign In with SSO</button>
+
+      <div class="divider">or</div>
+
+      <a class="btn-google" href="#">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+        Continue with Google
+      </a>
+
+      <p class="portal-link">
+        Student access portal &nbsp;—&nbsp;
+        <a href="/home">Click Now</a>
+      </p>
+    </div>
+
+    <!-- App tile strip -->
+    <div class="tiles">
+      <div class="tile">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/800px-Google_%22G%22_Logo.svg.png" alt="Google" />
+        Google
+      </div>
+      <div class="tile">
+        <img src="https://lh3.googleusercontent.com/vUSx5vBGNzf2iXeaZ7gd7n8yFuDSEpLi8-SLLY6jqPFKLVbfOUuL1BYcjlMwqGBEfk=s180" alt="Classroom" />
+        Classroom
+      </div>
+      <div class="tile">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg/1200px-Microsoft_Office_Teams_%282018%E2%80%93present%29.svg.png" alt="Teams" />
+        Teams
+      </div>
+      <div class="tile">
+        <img src="https://seeklogo.com/images/C/canvas-logo-DE74E2F00C-seeklogo.com.png" alt="Canvas" />
+        Canvas
+      </div>
+      <div class="tile">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/IXL_logo.svg/2560px-IXL_logo.svg.png" alt="IXL" style="border-radius:4px;background:#fff;padding:2px;" />
+        IXL
+      </div>
+      <div class="tile">
+        <img src="https://www.khanacademy.org/favicon.ico" alt="Khan" />
+        Khan Academy
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; 2025 ClassLink, Inc. &nbsp;|&nbsp;
+    <a href="#">Terms of Service</a> &nbsp;|&nbsp;
+    <a href="#">Privacy Policy</a> &nbsp;|&nbsp;
+    <a href="#">Support</a>
+  </div>
+
+</body>
+</html>

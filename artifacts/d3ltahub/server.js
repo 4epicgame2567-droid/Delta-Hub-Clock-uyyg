@@ -168,18 +168,15 @@ const transportStaticOptions = {
   },
 };
 
-app.use(express.static(path.join(__dirname, "static")));
-app.use("/ca", cors({ origin: true }));
-app.use("/bm", express.static(baremuxPath, transportStaticOptions));
-app.use("/ep", express.static(epoxyDistPath, transportStaticOptions));
-
+// Explicit page routes BEFORE static middleware (prevents index.html auto-serving at /)
 const routes = [
+  { path: "/", file: "splash.html" },
+  { path: "/home", file: "index.html" },
   { path: "/b", file: "apps.html" },
   { path: "/a", file: "games.html" },
   { path: "/play.html", file: "games.html" },
   { path: "/c", file: "settings.html" },
   { path: "/d", file: "tabs.html" },
-  { path: "/", file: "index.html" },
 ];
 
 routes.forEach(route => {
@@ -187,6 +184,12 @@ routes.forEach(route => {
     res.sendFile(path.join(__dirname, "static", route.file));
   });
 });
+
+// Static assets — index:false so Express never auto-serves index.html at /
+app.use(express.static(path.join(__dirname, "static"), { index: false }));
+app.use("/ca", cors({ origin: true }));
+app.use("/bm", express.static(baremuxPath, transportStaticOptions));
+app.use("/ep", express.static(epoxyDistPath, transportStaticOptions));
 
 app.use((_req, res) => {
   res.status(404).sendFile(path.join(__dirname, "static", "404.html"));
